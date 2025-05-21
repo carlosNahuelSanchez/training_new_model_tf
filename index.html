@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Predicción de raíces cuadráticas con TensorFlow.js</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
+    <style>
+        /* Reset y fuente base */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f4f8;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: #333;
+        }
+
+        h2 {
+            margin-bottom: 1rem;
+            color: #2c3e50;
+        }
+
+        input[type="number"] {
+            padding: 0.5rem 1rem;
+            font-size: 1.1rem;
+            border: 2px solid #2980b9;
+            border-radius: 5px;
+            width: 220px;
+            transition: border-color 0.3s ease;
+            outline: none;
+        }
+
+        input[type="number"]:focus:not(:disabled) {
+            border-color: #3498db;
+            box-shadow: 0 0 5px #3498db;
+        }
+
+        input[type="number"]:disabled {
+            background: #ddd;
+            cursor: not-allowed;
+        }
+
+        button {
+            padding: 0.5rem 1.5rem;
+            font-size: 1.1rem;
+            margin-left: 1rem;
+            border: none;
+            border-radius: 5px;
+            background-color: #2980b9;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: #3498db;
+        }
+
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+
+        #prediccionRaices, #estadoEntrenamiento {
+            margin-top: 1.5rem;
+            font-size: 1.2rem;
+            min-height: 1.5em;
+            white-space: pre-line; /* Para que respete saltos de línea */
+        }
+
+        #estadoEntrenamiento {
+            color: #555;
+            font-style: italic;
+        }
+
+        /* Contenedor para input y botón para que queden alineados */
+        .input-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Predicción de raíces para y = 2x² - 3x + 1</h2>
+
+    <div class="input-container">
+        <input type="number" id="inputY" step="0.01" placeholder="Ingrese un valor y" disabled />
+        <button id="btnPredecir" onclick="predecirRaices()" disabled>Predecir raíces</button>
+    </div>
+
+    <p id="prediccionRaices"></p>
+    <p id="estadoEntrenamiento"></p>
+
+    <script>
+        function calcularRaices(y) {
+            const a = 2;
+            const b = -3;
+            const c = 1 - y;
+            const discriminante = b * b - 4 * a * c;
+            if (discriminante < 0) return [0, 0];
+            const sqrtDisc = Math.sqrt(discriminante);
+            const x1 = (-b + sqrtDisc) / (2 * a);
+            const x2 = (-b - sqrtDisc) / (2 * a);
+            return [x1, x2];
+        }
+
+        const ysArray = [];
+        const xsArray = [];
+
+        for (let y = -10; y <= 30; y += 0.5) {
+            const roots = calcularRaices(y);
+            ysArray.push(y);
+            xsArray.push(roots);
+        }
+
+        const entradas = tf.tensor2d(ysArray, [ysArray.length, 1]);
+        const salidas = tf.tensor2d(xsArray);
+
+        const model = tf.sequential();
+        model.add(tf.layers.dense({ inputShape: [1], units: 10, activation: 'relu' }));
+        model.add(tf.layers.dense({ units: 2 }));
+        model.compile({ optimizer: 'adam', loss: 'meanSquaredError' });
+
+        const inputY = document.getElementById('inputY');
+        const btnPredecir = document.getElementById('btnPredecir');
+        const estado = document.getElementById('estadoEntrenamiento');
+        const resultado = document.getElementById('prediccionRaices');
+
+        async function entrenarModelo() {
+            estado.innerText = "Entrenando modelo, espere...";
+            inputY.disabled = true;
+            btnPredecir.disabled = true;
+
+            for (let i = 0; i <= 1000; i += 200) {
+                const res = await model.fit(entradas, salidas, { epochs: 200, shuffle: true });
+                estado.innerText = `Epoch ${i + 200}: pérdida = ${res.history.loss[0].toFixed(6)}`;
+            }
+
+            estado.innerText += "\nEntrenamiento finalizado.";
+            inputY.disabled = false;
+            btnPredecir.disabled = false;
+        }
+
+        entrenarModelo();
+
+        async function predecirRaices() {
+            const y = parseFloat(inputY.value);
+            if (isNaN(y)) {
+                alert('Por favor, ingresa un número válido para y.');
+                return;
+            }
+
+            const inputTensor = tf.tensor2d([[y]]);
+            const prediccion = model.predict(inputTensor);
+            const datos = await prediccion.array();
+            const x1 = datos[0][0];
+            const x2 = datos[0][1];
+
+            if (Math.abs(x1) < 1e-4 && Math.abs(x2) < 1e-4) {
+                resultado.innerText = `No hay raíces reales para y = ${y}`;
+            } else {
+                resultado.innerText = `Para y = ${y}, las raíces predichas son:\n x₁ ≈ ${x1.toFixed(4)}, x₂ ≈ ${x2.toFixed(4)}`;
+            }
+        }
+    </script>
+
+</body>
+
+</html>
